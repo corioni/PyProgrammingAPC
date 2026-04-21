@@ -1,0 +1,5 @@
+{
+    "python.analysis.extraPaths": [
+        "./MCMC_marta/MCMC_"
+    ]
+}
