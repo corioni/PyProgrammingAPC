@@ -1,4 +1,4 @@
-import numpy as np
+import numpy as np # type: ignore
 import random
 
 class MHsampler:
@@ -15,7 +15,7 @@ class MHsampler:
     Notes
     -----
     - logprob must return the log of the target distribution (up to a constant).
-    - the step 
+    - the step is fixed
     """
 
     step = 0.1  # proposal scale (standard deviation of Gaussian proposal)
@@ -140,6 +140,7 @@ class MHsampler:
             * self.accepted   : number of accepted proposals
             * self.nproposals : total number of proposals
         """
+
         x_trial = x + self.step * np.random.randn(self.ndim)
         logp = self.logprob(x, *args, **kwargs)
         logp_trial = self.logprob(x_trial, *args, **kwargs)
@@ -175,6 +176,7 @@ class MHsampler:
         """
         x0 = self._initialize_walkers(xstart, mode)
         chains = np.zeros((nsteps, self.nwalkers, self.ndim))
+
         for w in range(self.nwalkers):
             x = x0[w]
             chains[0, w] = x

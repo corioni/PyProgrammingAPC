@@ -1,16 +1,48 @@
 import numpy as np # type: ignore
 
 class MHsampler:
+    """
+    Basic Metropolis-Hastings MCMC sampler.
 
+    Characteristics
+    ---------------
+    - Uses a Gaussian random-walk proposal:
+          x_new = x_old + step * N(0, I)
+    - Supports multiple independent walkers.
+    - Walkers are NOT coupled (this is not an ensemble sampler).
+    - Chains are stored with shape:
+          (nsteps, nwalkers, ndim)
+    - Can start from user-specified positions or random prior draws.
 
-    step = 0.15  # proposal scale (standard deviation of Gaussian proposal)
+    Parameters
+    ----------
+    nwalkers : int
+        Number of independent chains.
 
-    def __init__(self, nwalkers, logprob, prior, ndim):
+    logprob : callable
+        Function returning the log-posterior (or log-target density).
+
+    prior : list-like
+        Prior bounds used only for random initialization.
+        Expected format:
+            [[xmin1, xmax1],
+             [xmin2, xmax2],
+             ...]
+
+    ndim : int
+        Number of model parameters.
+
+    step : float
+        Standard deviation of the Gaussian proposal distribution.
+    """
+
+    def __init__(self, nwalkers, logprob, prior, ndim, step):
 
         self.nwalkers = nwalkers
         self.logprob = logprob
         self.prior = prior
         self.ndim = ndim
+        self.step = step
 
         # Storage for results
         self.chain = None
@@ -25,6 +57,32 @@ class MHsampler:
 
 
     def _initialize_walkers(self, xstart, mode):
+        
+        """
+        Generate initial positions for all walkers.
+
+        Parameters
+        ----------
+        xstart : ndarray or None
+            Initial walker positions.
+            Shape must be (nwalkers, ndim).
+
+        mode : str
+            'input'
+                Use xstart provided by the user.
+
+            'resume'
+                Continue from the last stored sample.
+
+            'random'
+                Draw initial positions uniformly from prior bounds.
+
+        Returns
+        -------
+        ndarray
+            Initial walker positions with shape
+            (nwalkers, ndim).
+        """
 
         self.accepted = 0
         self.nproposals = 0
@@ -47,7 +105,15 @@ class MHsampler:
             raise ValueError("Invalid mode. Choose 'input', 'resume', or 'random'.") 
 
     def _starting_point(self):
+        """
+        Draw initial walker positions uniformly
+        within the prior bounds.
 
+        Returns
+        -------
+        ndarray
+            Shape (nwalkers, ndim)
+        """
         rng = np.random.default_rng(self.seed)  
 
         xstart = np.ndarray((self.nwalkers,self.ndim))
@@ -59,9 +125,36 @@ class MHsampler:
 
 
     def _run_single_walker(self, args):
+        """
+        Run a single Metropolis-Hastings chain.
+
+        Parameters
+        ----------
+        args : tuple
+            Contains:
+            - logprob function
+            - proposal scale
+            - parameter dimension
+            - starting point
+            - number of steps
+            - positional arguments for logprob
+            - keyword arguments for logprob
+
+        Returns
+        -------
+        chain : ndarray
+            Chain with shape (nsteps, ndim)
+
+        accepted : int
+            Number of accepted proposals.
+
+        nsteps-1 : int
+            Total number of proposals.
+        """
+
         logprob, step, ndim, x0, nsteps, args_lp, kwargs_lp = args
 
-        rng = np.random.default_rng(self.seed) ####
+        rng = np.random.default_rng(self.seed) 
 
         chain = np.zeros((nsteps, ndim))
         x = x0.copy()
@@ -71,9 +164,11 @@ class MHsampler:
         chain[0] = x
 
         for i in range(1, nsteps):
+            # Gaussian random-walk proposal
             x_trial = x + step * rng.normal(size=ndim)
             logp_trial = logprob(x_trial, *args_lp, **kwargs_lp)
-
+            
+            # Metropolis acceptance test
             if np.log(rng.random()) < (logp_trial - logp):
                 x = x_trial
                 logp = logp_trial
@@ -85,7 +180,32 @@ class MHsampler:
 
     def run(self, nsteps, xstart=None, mode='input', *args, **kwargs):
         """
-        Sequential execution using the same worker used for parallel runs.
+        Execute all walkers.
+
+        Parameters
+        ----------
+        nsteps : int
+            Number of MCMC steps per walker.
+
+        xstart : ndarray or None
+            Initial walker positions.
+            Required if mode='input'.
+
+        mode : str
+            Initialization mode:
+            - 'input'
+            - 'resume'
+            - 'random'
+
+        *args, **kwargs
+            Additional arguments passed directly
+            to logprob().
+
+        Notes
+        -----
+        Current implementation runs walkers
+        sequentially, although the structure is
+        compatible with possible multiprocessing.
         """
 
         x0 = self._initialize_walkers(xstart, mode)
@@ -118,18 +238,34 @@ class MHsampler:
         def acceptance_fraction(self):
             return self.accepted / self.nproposals if self.nproposals > 0 else 0.0
 
-    def get_flat_chain(self, burnin = 0):
+    def get_flat_chain(self, burnin = 0 ):
+        """
+        Return flattened samples.
+
+        Parameters
+        ----------
+        burnin : int, optional
+            Number of initial samples to discard
+            along the chain axis.
+
+        Returns
+        -------
+        ndarray
+            Shape:
+                ((nsteps-burnin)*nwalkers, ndim)
+        """ 
 
         return self.chain[burnin:].reshape(-1, self.ndim)
 
 
     def seed_rng(self, seed):
         """
-        Set the random seed for reproducibility.
+        Set random seed.
 
         Parameters
         ----------
         seed : int
+            Seed used for reproducible chains.
         """
         self.seed = seed
         np.random.seed(seed)

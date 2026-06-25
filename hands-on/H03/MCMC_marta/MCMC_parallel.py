@@ -4,14 +4,14 @@ import numpy as np # type: ignore
 class MHsampler:
 
 
-    step = 0.15  # proposal scale (standard deviation of Gaussian proposal)
 
-    def __init__(self, nwalkers, logprob, prior, ndim):
+    def __init__(self, nwalkers, logprob, prior, ndim, step):
 
         self.nwalkers = nwalkers
         self.logprob = logprob
         self.prior = prior
         self.ndim = ndim
+        self.step = step
 
         # Storage for results
         self.chain = None
@@ -144,3 +144,5 @@ class MHsampler:
         seed : int
         """
         self.seed = seed
+
+
